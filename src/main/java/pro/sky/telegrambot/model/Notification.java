@@ -1,14 +1,18 @@
 package pro.sky.telegrambot.model;
 
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
 import java.time.LocalDateTime;
 
-@Enity
+@Entity
 public class Notification {
     // create class for BD. It is same as admin.sql
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long user;
+    private Long userId;
     private String event;
     private LocalDateTime date;
 
@@ -20,12 +24,12 @@ public class Notification {
         this.id = id;
     }
 
-    public Long getUser() {
-        return user;
+    public Long getUserId() {
+        return userId;
     }
 
-    public void setUser(Long user) {
-        this.user = user;
+    public void setUserId(Long user) {
+        this.userId = user;
     }
 
     public String getEvent() {
@@ -42,5 +46,15 @@ public class Notification {
 
     public void setDate(LocalDateTime date) {
         this.date = date;
+    }
+
+    @Override
+    public String toString() {
+        return "Notification{" +
+                "id=" + id +
+                ", userId=" + userId +
+                ", event='" + event + '\'' +
+                ", date=" + date +
+                '}';
     }
 }
