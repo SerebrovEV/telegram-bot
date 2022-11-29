@@ -36,7 +36,7 @@ public class NotificationService {
 
     // search event at the moment, every minute
     public List<Notification> checkingReminders() {
-        logger.info("checkingReminders work");
+        logger.info("Method checkingReminders is working");
         LocalDateTime dateTimeNow = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
         return List.copyOf(notificationRepository.findByDate(dateTimeNow));
     }

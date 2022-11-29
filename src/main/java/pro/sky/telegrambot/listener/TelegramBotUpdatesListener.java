@@ -8,7 +8,7 @@ import com.pengrad.telegrambot.model.User;
 import com.pengrad.telegrambot.request.SendMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import pro.sky.telegrambot.model.AnswerForUser;
@@ -19,21 +19,30 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
 public class TelegramBotUpdatesListener implements UpdatesListener {
+    @Value("${telegram.bot.admin}")
+    private Long adminId;
 
     //add logger
-    private Logger logger = LoggerFactory.getLogger(TelegramBotUpdatesListener.class);
+    private final Logger logger = LoggerFactory.getLogger(TelegramBotUpdatesListener.class);
 
     //injection TGBot
-    @Autowired
-    private TelegramBot telegramBot;
-    @Autowired
-    private NotificationService notificationService;
+    private final TelegramBot telegramBot;
+    private final NotificationService notificationService;
+
+    public TelegramBotUpdatesListener(TelegramBot telegramBot, NotificationService notificationService) {
+        this.telegramBot = telegramBot;
+        this.notificationService = notificationService;
+    }
+
+    private final Pattern pattern = Pattern.compile("([0-9.:\\s]{16})(\\s)([\\W+]+)");
+    private final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
     /*method that needs to be executed after dependency injection is done to perform any initialization.
     send message about start bot
@@ -41,13 +50,13 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
     @PostConstruct
     public void init() {
         telegramBot.setUpdatesListener(this);
-         telegramBot.execute(new SendMessage(527248474, AnswerForUser.START));
+        telegramBot.execute(new SendMessage(adminId, AnswerForUser.START));
     }
 
     // send message about close bot
     @PreDestroy
     public void destroy() {
-          telegramBot.execute(new SendMessage(527248474, AnswerForUser.END));
+        telegramBot.execute(new SendMessage(adminId, AnswerForUser.END));
     }
 
     // Handling incoming messages
@@ -60,22 +69,34 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
               logger.info("Processing update: {}", update);
 
             Handling incoming messages in simple form*/
-            logger.info("User: {}. Text message: {}.", update.message().from().id(), update.message().text());
-            checkMessage(update);
-
+            try {
+                logger.info("User: {}. Text message: {}.", update.message().from().id(), update.message().text());
+                validationMessage(update);
+            } catch (NullPointerException ignored) {
+            }
         });
         return UpdatesListener.CONFIRMED_UPDATES_ALL;
     }
 
-    // check text in incoming message
-    private void checkMessage(Update update) {
-        Message message = update.message();
+    // check incoming message
+    private void validationMessage(Update update) {
+
         String textMessage = update.message().text();
         User user = update.message().from();
         Long userId = user.id();
-        Pattern pattern = Pattern.compile("([0-9.:\\s]{16})(\\s)([\\W+]+)");
-        Matcher matcher = pattern.matcher(textMessage);
+        if (textMessage == null) {
+            telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE));
+            telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE));
+            logger.info("Send message: <{}>, to user: {}.", AnswerForUser.MISTAKE, userId);
+        } else {
+            processingMessage(textMessage, userId);
+        }
+    }
 
+    //parsing messages after checking
+    private void processingMessage(String textMessage, Long userId) {
+
+        Matcher matcher = pattern.matcher(textMessage);
         if (textMessage.equals("/start")) {
 
             telegramBot.execute(new SendMessage(userId, AnswerForUser.HELLO));
@@ -83,18 +104,23 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
 
         } else if (matcher.matches()) {
 
-            String date = textMessage.substring(0, 16);
-            String eventText = textMessage.substring(17);
-            LocalDateTime dateTime = LocalDateTime.parse(date, DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+            String date = matcher.group(1);
+            String eventText = matcher.group(3);
 
-            notificationService.addNotification(userId, eventText, dateTime);
-
-            telegramBot.execute(new SendMessage(userId, AnswerForUser.DONE));
-            logger.info("Send message: <{}>, to user: {}.", AnswerForUser.DONE, userId);
+            try {
+                LocalDateTime dateTime = LocalDateTime.parse(date, dateTimeFormatter);
+                notificationService.addNotification(userId, eventText, dateTime);
+                telegramBot.execute(new SendMessage(userId, AnswerForUser.DONE + ": " + textMessage));
+                logger.info("Send message: <{}>, to user: {}.", AnswerForUser.DONE, userId);
+            } catch (DateTimeParseException e) {
+                telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE));
+                telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE));
+                logger.info("Send message: <{}>, to user: {}.", AnswerForUser.MISTAKE, userId);
+            }
 
         } else {
-
             telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE));
+            telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE));
             logger.info("Send message: <{}>, to user: {}.", AnswerForUser.MISTAKE, userId);
         }
     }
