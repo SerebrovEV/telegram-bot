@@ -72,7 +72,9 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
             try {
                 logger.info("User: {}. Text message: {}.", update.message().from().id(), update.message().text());
                 validationMessage(update);
-            } catch (NullPointerException ignored) {
+            } catch (NullPointerException e) {
+                logger.error("It was send a null update. User edit message");
+
             }
         });
         return UpdatesListener.CONFIRMED_UPDATES_ALL;
