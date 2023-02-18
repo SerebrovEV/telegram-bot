@@ -24,6 +24,9 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ *Класс, отвечающий за получение {@link Update} от {@link TelegramBot} и их обработку и дальнейшее распределение
+ */
 @Service
 public class TelegramBotUpdatesListener implements UpdatesListener {
     @Value("${telegram.bot.admin}")
@@ -44,31 +47,31 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
     private final Pattern pattern = Pattern.compile("([0-9.:\\s]{16})(\\s)([\\W+]+)");
     private final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
-    /*method that needs to be executed after dependency injection is done to perform any initialization.
-    send message about start bot
-    */
+    /**
+     * Метод для отпраки сообщения администратору о старте работы бота.
+     */
     @PostConstruct
     public void init() {
         telegramBot.setUpdatesListener(this);
-        telegramBot.execute(new SendMessage(adminId, AnswerForUser.START));
+        telegramBot.execute(new SendMessage(adminId, AnswerForUser.START.toString()));
     }
 
-    // send message about close bot
+    /**
+     * Метод для отпраки сообщения администратору об окончании работы бота.
+     */
     @PreDestroy
     public void destroy() {
-        telegramBot.execute(new SendMessage(adminId, AnswerForUser.END));
+        telegramBot.execute(new SendMessage(adminId, AnswerForUser.END.toString()));
     }
 
-    // Handling incoming messages
+    /**
+     * Метод получения и обработки входящих {@link Update}
+     * @param updates available updates
+     * @return
+     */
     @Override
     public int process(List<Update> updates) {
         updates.forEach(update -> {
-            // Process updates here
-
-            /*logger for get all information
-              logger.info("Processing update: {}", update);
-
-            Handling incoming messages in simple form*/
             try {
                 logger.info("User: {}. Text message: {}.", update.message().from().id(), update.message().text());
                 validationMessage(update);
@@ -80,28 +83,37 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         return UpdatesListener.CONFIRMED_UPDATES_ALL;
     }
 
-    // check incoming message
+    /**
+     * Метод для проверки сообщения из бота.
+     *
+     * @param update
+     */
     private void validationMessage(Update update) {
 
         String textMessage = update.message().text();
         User user = update.message().from();
         Long userId = user.id();
         if (textMessage == null) {
-            telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE));
-            telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE));
+            telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE.toString()));
+            telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE.toString()));
             logger.info("Send message: <{}>, to user: {}.", AnswerForUser.MISTAKE, userId);
         } else {
             processingMessage(textMessage, userId);
         }
     }
 
-    //parsing messages after checking
+    /**
+     * Метод обработки сообщений из бота.
+     *
+     * @param textMessage - текст сообщения;
+     * @param userId - id пользователя.
+     */
     private void processingMessage(String textMessage, Long userId) {
 
         Matcher matcher = pattern.matcher(textMessage);
         if (textMessage.equals("/start")) {
 
-            telegramBot.execute(new SendMessage(userId, AnswerForUser.HELLO));
+            telegramBot.execute(new SendMessage(userId, AnswerForUser.HELLO.toString()));
             logger.info("Send message: <{}>, to user: {}.", AnswerForUser.HELLO, userId);
 
         } else if (matcher.matches()) {
@@ -111,23 +123,31 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
 
             try {
                 LocalDateTime dateTime = LocalDateTime.parse(date, dateTimeFormatter);
-                notificationService.addNotification(userId, eventText, dateTime);
-                telegramBot.execute(new SendMessage(userId, AnswerForUser.DONE + ": " + textMessage));
-                logger.info("Send message: <{}>, to user: {}.", AnswerForUser.DONE, userId);
+                if (dateTime.isBefore(LocalDateTime.now())) {
+                    telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE.toString()));
+                    telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE.toString()));
+                } else {
+                    notificationService.addNotification(userId, eventText, dateTime);
+                    telegramBot.execute(new SendMessage(userId, AnswerForUser.DONE + ": " + textMessage));
+                    logger.info("Send message: <{}>, to user: {}.", AnswerForUser.DONE, userId);
+                }
             } catch (DateTimeParseException e) {
-                telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE));
-                telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE));
+                telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE.toString()));
+                telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE.toString()));
                 logger.info("Send message: <{}>, to user: {}.", AnswerForUser.MISTAKE, userId);
             }
 
         } else {
-            telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE));
-            telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE));
+            telegramBot.execute(new SendMessage(userId, AnswerForUser.MISTAKE.toString()));
+            telegramBot.execute(new SendMessage(userId, AnswerForUser.EXAMPLE.toString()));
             logger.info("Send message: <{}>, to user: {}.", AnswerForUser.MISTAKE, userId);
         }
     }
 
-    // every minute start search for event
+    /**
+     * Метод для проверки записей в базе данных на необходимость отправки напоминания пользователю. Проверка происходит
+     * раз в минуту.
+     */
     @Scheduled(cron = "0 0/1 * * * *")
     public void sendMessageFromDataBase() {
         logger.info("Method for searching event is working");
