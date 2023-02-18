@@ -6,6 +6,8 @@
 ### Язык и окружение:
 - Spring Boot;
 - Java-telegram-bot-api;
+- Hibernate;
+- Liquibase;
 - DataBase: PostgreSQL.
 ## IDE
 - IntelliJ IDEA Community Edition 2022.2.3.
